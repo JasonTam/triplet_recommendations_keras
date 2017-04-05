@@ -1,6 +1,8 @@
 import numpy as np
 
 from sklearn.metrics import roc_auc_score
+import torch
+from torch.autograd import Variable
 
 
 def predict(model, uid, pids):
@@ -81,3 +83,28 @@ def full_auc(model, ground_truth):
             scores.append(roc_auc_score(grnd, predictions))
 
     return sum(scores) / len(scores)
+
+
+def full_auc_pytorch(net, ground_truth):
+    ground_truth = ground_truth.tocsr()
+
+    no_users, no_items = ground_truth.shape
+
+    pid_arr = np.arange(no_items, dtype=np.int64)
+
+    scores = []
+
+    for user_id, row in enumerate(ground_truth):
+        user_arr = np.array([user_id]*len(pid_arr), dtype=np.int64)
+        user_input = Variable(torch.LongTensor(user_arr))
+        items_input = Variable(torch.LongTensor(pid_arr))
+        
+        predictions = net.predict_score(user_input, items_input)
+        preds_arr = np.squeeze(predictions.data.numpy())
+
+        true_pids = row.indices[row.data == 1]
+        if len(true_pids):
+            scores.append(roc_auc_score(row.toarray()[0].astype(bool),
+                                        preds_arr))
+
+    return np.mean(scores)
